@@ -1,0 +1,5 @@
+{
+  "functions": {
+    "api/lookup.py": { "includeFiles": "backend/upside/**", "maxDuration": 30 }
+  }
+}

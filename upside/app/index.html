@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Upside — Stock Picks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: confident fintech product, calm and precise, one hero number per screen
+   IDEA: a trading terminal shrunk into a pocket — a ticker card with a forecast cone
+   PICTURE: large price chart with history line flowing into a glowing forecast band
+   COLOUR and TYPE: deep evergreen-black ground, mint for upside, coral for risk; Space Grotesk numbers, Inter text
+   LAYOUT: phone-width app shell, segmented Day/Week/Month tabs, hero pick, signals, news, runners-up */
+:root{color-scheme:dark;--bg:#07110e;--card:#0e1a16;--card2:#13231e;--line:#1f332c;--ink:#e9f4ef;--mute:#8aa39a;--up:#3ef0a3;--up2:#1fb97a;--down:#ff6b5e;--gold:#f5c451}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -200px,#103a2b 0,var(--bg) 60%) fixed,var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip;-webkit-font-smoothing:antialiased}
+.app{max-width:480px;margin:0 auto;padding:18px 16px 40px}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:10px;font:700 22px/1 "Space Grotesk",sans-serif;letter-spacing:-.02em}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,var(--up),#0b6b47);display:grid;place-items:center;box-shadow:0 6px 20px #3ef0a344}
+.stamp{font-size:13px;color:var(--mute);text-align:right;line-height:1.3}
+.live{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--up);margin-right:5px;box-shadow:0 0 0 0 #3ef0a3aa;animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 8px #3ef0a300}100%{box-shadow:0 0 0 0 #3ef0a300}}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px;position:relative;margin-bottom:16px}
+.seg button{all:unset;cursor:pointer;text-align:center;min-height:42px;line-height:42px;border-radius:10px;font:600 15px Inter,sans-serif;color:var(--mute);position:relative;z-index:1;transition:color .25s}
+.seg button[aria-selected=true]{color:#04130d}
+.seg button:focus-visible{outline:2px solid var(--up);outline-offset:2px}
+.pill{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/3);background:var(--up);border-radius:10px;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.hero{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:22px;padding:18px 18px 12px;box-shadow:0 20px 50px #0008}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px 12px;flex-wrap:wrap}
+.tk{font:700 40px/1 "Space Grotesk",sans-serif;letter-spacing:-.03em}
+.nm{color:var(--mute);font-size:14px;margin-top:4px}
+.badge{font:600 13px Inter;background:#3ef0a31a;color:var(--up);border:1px solid #3ef0a344;padding:5px 10px;border-radius:99px;white-space:nowrap}
+.nums{display:flex;gap:18px;align-items:flex-end;margin:16px 0 4px;flex-wrap:wrap}
+.price{font:700 30px/1 "Space Grotesk",sans-serif}
+.chg{font-size:14px;color:var(--up);margin-top:4px}.chg.neg{color:var(--down)}
+.target{margin-left:auto;text-align:right}
+.target b{display:block;font:700 30px/1 "Space Grotesk",sans-serif;color:var(--up)}
+.target span{font-size:13px;color:var(--mute)}
+.fig{position:relative;height:210px;margin:8px -6px 0}.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--mute);padding:4px 0 6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle;background:var(--ink)}
+.legend i.f{background:var(--up)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+.stat span{display:block;font-size:13px;color:var(--mute)}
+.stat b{font:700 20px "Space Grotesk",sans-serif;white-space:nowrap}
+h2{font:700 18px "Space Grotesk",sans-serif;margin:22px 0 10px;letter-spacing:-.01em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:6px 16px}
+.sig{display:grid;grid-template-columns:7.5em minmax(0,1fr) 2.6em;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px}
+.sig:last-child{border:0}
+.bar{height:8px;background:#ffffff10;border-radius:9px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--up2),var(--up));width:0;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+.sig b{text-align:right;font:700 14px "Space Grotesk",system-ui,sans-serif}
+.thesis{font-size:15px;color:#cfe2da;margin:12px 0 0}
+.news a{display:block;color:inherit;text-decoration:none;padding:12px 0;border-bottom:1px solid var(--line)}
+.news a:last-child{border:0}
+.news small{color:var(--mute);font-size:13px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--up)}.dot.n{background:var(--gold)}.dot.d{background:var(--down)}
+.run{display:grid;grid-template-columns:3.6em minmax(0,1fr) 80px 4em;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.run:last-child{border:0}
+.run b{font:700 16px "Space Grotesk",system-ui,sans-serif}.run span{color:var(--mute);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.run em{font-style:normal;text-align:right;color:var(--up);font:700 15px "Space Grotesk",system-ui,sans-serif}
+.run svg{width:80px;height:26px}
+.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.duo .stat b{font-size:clamp(17px,5vw,22px);white-space:normal}.duo small{display:block;color:var(--mute);font-size:13px;margin-top:2px}
+.trade{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px}
+.trade:last-child{border:0}.trade small{color:var(--mute);font-size:13px}
+.trade em{font-style:normal;font-weight:600;text-align:right;white-space:nowrap}.trade em.b{color:var(--up)}.trade em.s{color:var(--down)}
+.credit{font-size:13px;color:var(--mute);margin:-4px 0 10px}.credit a{color:var(--up)}
+.search{display:flex;gap:8px;margin:0 0 10px;position:relative}
+.search input{flex:1;min-height:46px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 16px Inter,system-ui,sans-serif;padding:0 12px 0 40px;text-transform:uppercase;letter-spacing:.02em}
+.search input::placeholder{text-transform:none;letter-spacing:0;font-weight:400;color:var(--mute)}
+.search input:focus{outline:2px solid var(--up);outline-offset:1px}
+.search svg{position:absolute;left:13px;top:14px;pointer-events:none}
+.search button{all:unset;cursor:pointer;min-width:58px;min-height:46px;text-align:center;border-radius:14px;background:var(--up);color:#04130d;font:700 15px Inter,system-ui,sans-serif}
+.search button:focus-visible,.chips button:focus-visible,.lookbar button:focus-visible{outline:2px solid var(--up);outline-offset:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.chips:empty{display:none}
+.chips button{all:unset;cursor:pointer;font:600 13px Inter,system-ui,sans-serif;padding:9px 13px;border-radius:99px;border:1px solid var(--line);color:var(--mute)}
+.msg{font-size:14px;color:var(--gold);margin:0 0 12px}.msg:empty{display:none}.msg.busy{color:var(--mute)}
+.lookbar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#3ef0a314;border:1px solid #3ef0a344;border-radius:14px;padding:6px 6px 6px 14px;margin-bottom:12px;font-size:14px}
+.lookbar[hidden]{display:none}
+.lookbar button{all:unset;cursor:pointer;padding:10px 12px;border-radius:10px;background:var(--card);font:600 13px Inter,system-ui,sans-serif;color:var(--ink);white-space:nowrap}
+.rk{display:flex;align-items:baseline;gap:10px;padding:12px 0 10px}.rk b{font:700 34px/1 "Space Grotesk",system-ui,sans-serif;color:var(--up)}
+.rk span{color:var(--mute);font-size:14px}.rankc small{display:block;color:var(--mute);font-size:13px;padding:10px 0 12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.note{font-size:13px;color:var(--mute);margin-top:22px;line-height:1.5}
+.sample{font-size:13px;color:var(--gold);margin:-4px 0 12px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media(max-width:380px){.tk{font-size:34px}.price,.target b{font-size:26px}.stats{gap:6px}.stat{padding:10px 8px}.stat b{font-size:17px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><div class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#04130d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></div>Upside</div>
+    <div class="stamp"><span class="live"></span>Market scan<br><span id="ts">Updated today</span></div>
+  </header>
+  <p class="sample" id="sample">Sample data for the prototype — not live prices, not investment advice.</p>
+  <form class="search" id="search" role="search" autocomplete="off">
+    <label for="q" class="sr">Ticker symbol</label>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8aa39a" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="q" name="q" placeholder="Look up any ticker" maxlength="10" autocapitalize="characters" autocorrect="off" spellcheck="false" list="tks" enterkeyhint="search">
+    <button type="submit">Go</button>
+  </form>
+  <datalist id="tks"></datalist>
+  <div class="chips" id="recent" aria-label="Recent searches"></div>
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+  <div class="lookbar" id="lookbar" hidden><span id="looklabel"></span><button type="button" id="back">✕ Top picks</button></div>
+  <nav class="seg" role="tablist" aria-label="Horizon">
+    <div class="pill" id="pill"></div>
+    <button role="tab" id="t-day" aria-selected="true" data-h="day">Day</button>
+    <button role="tab" id="t-week" aria-selected="false" data-h="week">Week</button>
+    <button role="tab" id="t-month" aria-selected="false" data-h="month">Month</button>
+  </nav>
+  <main id="view" role="tabpanel"></main>
+  <p class="note"><span id="disc"></span> How picks work: every horizon scores the universe on news sentiment, analyst revisions, price momentum, technical setup, unusual volume, rising Reddit attention and what members of Congress have disclosed buying or selling, then ranks stocks by overall score and shows the top one with its model upside. Forecast bands are model ranges, not guarantees. Markets can and do move against any forecast.</p>
+</div>
+<script>
+{
+// Where the live picks come from. In the iPhone build set window.UPSIDE_API
+// to your published picks.json URL (see README).
+const API=window.UPSIDE_API||"picks.json";
+// Optional on-demand lookup for tickers outside the scan (see README: Vercel).
+const LOOKUP=window.UPSIDE_LOOKUP||"";
+const BASE=API.replace(/[^/]*$/,"");
+const LABEL={day:"by close tomorrow",week:"over 5 trading days",month:"over the next month"};
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"";
+let mode="picks",L=null,stocks=null,live=false;
+let H={
+ day:{tk:"AMD",nm:"Advanced Micro Devices",sector:"Semiconductors",price:148.20,chg:2.4,up:4.1,conf:72,risk:"Medium",vol:"68M",horizon:"by close tomorrow",pts:60,unit:"5-min",
+  thesis:"Fresh data-center GPU order headlines and a pre-market analyst upgrade pushed sentiment to a 30-day high, while price just cleared yesterday's range on heavy volume.",
+  sig:[["News sentiment",88],["Analyst ratings",74],["Momentum",81],["Technicals",69],["Volume",77],["Reddit buzz",84],["Politician trades",58]],
+  crowd:{mentions:412,m24:150},capitol:{buys:3,sells:1,members:3,recent:[["Rep. A. Rivera","House","purchase","$15,001 - $50,000","2026-10-28"],["Sen. M. Chen","Senate","purchase","$1,001 - $15,000","2026-10-14"]]},
+  news:[["u","Cloud provider expands AI accelerator order","Wire · 2h ago"],["u","Analyst lifts price target, cites share gains","Research note · 4h ago"],["n","Chip sector awaits inflation print Friday","Markets desk · 6h ago"]],
+  run:[["NVDA","Nvidia",2.9],["SHOP","Shopify",2.6],["UBER","Uber",2.2]]},
+ week:{tk:"AMZN",nm:"Amazon.com",sector:"Consumer / Cloud",price:212.40,chg:1.1,up:6.8,conf:66,risk:"Low",vol:"41M",horizon:"over 5 trading days",pts:40,unit:"daily",
+  thesis:"Holiday-season spending trackers are running ahead of estimates and cloud channel checks improved; the stock is basing just under its prior high with rising accumulation.",
+  sig:[["News sentiment",79],["Analyst ratings",83],["Momentum",71],["Technicals",76],["Volume",64],["Reddit buzz",62],["Politician trades",71]],
+  crowd:{mentions:236,m24:198},capitol:{buys:5,sells:2,members:4,recent:[["Sen. L. Novak","Senate","purchase","$50,001 - $100,000","2026-10-30"],["Rep. D. Walsh","House","sale","$1,001 - $15,000","2026-10-21"]]},
+  news:[["u","Early holiday sales tracking above forecast","Retail data · 1d ago"],["u","Cloud unit wins multi-year enterprise deal","Wire · 1d ago"],["d","Regulators open review of marketplace fees","Policy desk · 2d ago"]],
+  run:[["META","Meta Platforms",5.9],["CRM","Salesforce",5.1],["JPM","JPMorgan",4.4]]},
+ month:{tk:"LLY",nm:"Eli Lilly",sector:"Healthcare",price:868.00,chg:-0.6,up:11.5,conf:61,risk:"Medium",vol:"3.2M",horizon:"over 30 days",pts:60,unit:"daily",
+  thesis:"A late-stage trial readout is due within the window, supply expansion lifts volume estimates, and analysts have raised next-year EPS for six straight weeks after a pullback.",
+  sig:[["News sentiment",72],["Analyst ratings",91],["Momentum",58],["Technicals",66],["Volume",73],["Reddit buzz",55],["Politician trades",88]],
+  crowd:{mentions:61,m24:58},capitol:{buys:6,sells:0,members:5,recent:[["Rep. K. Patel","House","purchase","$100,001 - $250,000","2026-11-03"],["Sen. M. Chen","Senate","purchase","$15,001 - $50,000","2026-10-25"]]},
+  news:[["u","Trial readout scheduled for early December","Company release · 3d ago"],["u","New manufacturing site begins production","Wire · 5d ago"],["n","Drug-pricing talks continue in Congress","Policy desk · 1w ago"]],
+  run:[["AVGO","Broadcom",9.7],["COST","Costco",8.2],["PLTR","Palantir",7.9]]}
+};
+function rng(s){return()=>{s=(s*16807)%2147483647;return(s-1)/2147483646}}
+function series(seed,n,end,drift){const r=rng(seed);let v=[1];for(let i=1;i<n;i++)v.push(v[i-1]*(1+drift+(r()-.5)*.022));const k=end/v[n-1];return v.map(x=>x*k)}
+const fmt=n=>n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const view=document.getElementById("view"),pill=document.getElementById("pill");
+const tabs=[...document.querySelectorAll(".seg button")];
+let cur="day",ro;
+function spark(seed,up,data){const v=data&&data.length>2?data:series(seed,24,100,up/2400),mn=Math.min(...v),mx=Math.max(...v);return `<svg viewBox="0 0 80 26" aria-hidden="true"><polyline fill="none" stroke="#3ef0a3" stroke-width="1.8" stroke-linejoin="round" points="${v.map((y,i)=>`${(i/23*80).toFixed(1)},${(24-(y-mn)/(mx-mn||1)*22).toFixed(1)}`).join(" ")}"/></svg>`}
+function crowdHtml(d){
+ const c=d.crowd||{mentions:0,m24:0},k=d.capitol||{buys:0,sells:0,members:0,recent:[]};
+ const ch=c.m24?Math.round((c.mentions/c.m24-1)*100):null;
+ const chTxt=c.mentions<5?"Barely discussed":ch===null?"New on Reddit":(ch>=0?"▲ ":"▼ ")+Math.abs(ch)+"% vs yesterday";
+ const fmtD=x=>{const t=new Date(x+"T12:00:00");return isNaN(t)?x:t.toLocaleDateString("en-US",{month:"short",day:"numeric"})};
+ return `<h2>Reddit &amp; Congress</h2>
+ <div class="duo">
+  <div class="stat"><span>Reddit mentions, 24h</span><b>${Number(c.mentions||0).toLocaleString()}</b><small>${chTxt}</small></div>
+  <div class="stat"><span>Congress, 90 days</span><b>${k.buys} buy${k.buys===1?"":"s"} · ${k.sells} sell${k.sells===1?"":"s"}</b><small>${k.members} member${k.members===1?"":"s"} traded</small></div>
+ </div>
+ ${k.recent&&k.recent.length?`<h2 style="font-size:16px">Recent politician trades</h2>
+ <p class="credit">Data: <a href="https://www.bargo.ai/free-apis/congress" target="_blank" rel="noopener">Bargo</a> from official STOCK Act filings, disclosed up to 45 days after the trade.</p>
+ <div class="card">${k.recent.map(r=>`<div class="trade"><span>${esc(r[0])}<br><small>${esc(r[1])} · traded ${esc(fmtD(r[4]))}</small></span><em class="${String(r[2]).startsWith("p")?"b":"s"}">${String(r[2]).startsWith("p")?"Bought":"Sold"}<br><small>${esc(r[3])}</small></em></div>`).join("")}</div>`:""}`;
+}
+function render(h){
+ const d=(mode==="lookup"?L:H)[h];cur=h;
+ tabs.forEach((b,i)=>{const on=b.dataset.h===h;b.setAttribute("aria-selected",on);b.tabIndex=on?0:-1;if(on)pill.style.transform=`translateX(${i*100}%)`});
+ const tgt=d.target||d.price*(1+d.up/100);
+ view.innerHTML=`
+ <section class="hero">
+  <div class="top"><div><div class="tk">${esc(d.tk)}</div><div class="nm">${esc(d.nm)}${d.sector?" · "+esc(d.sector):""}</div></div><span class="badge">${mode==="lookup"?"Search":"Top pick"} · ${h}</span></div>
+  <div class="nums"><div><div class="price">$${fmt(d.price)}</div><div class="chg ${d.chg<0?"neg":""}">${d.chg<0?"▼":"▲"} ${Math.abs(d.chg)}% today</div></div>
+   <div class="target"><b>${d.up<0?"":"+"}${d.up}%</b><span>model ${d.up<0?"move":"upside"} ${esc(d.horizon)}</span></div></div>
+  <div class="fig"><svg id="chart" role="img" aria-label="${esc(d.tk)} price history and forecast range"></svg></div>
+  <div class="legend"><span><i></i>Price (${d.unit})</span><span><i class="f"></i>Forecast to $${fmt(tgt)}</span></div>
+ </section>
+ <div class="stats">
+  <div class="stat"><span>Confidence</span><b>${d.conf}%</b></div>
+  <div class="stat"><span>Risk</span><b>${esc(d.risk)}</b></div>
+  <div class="stat"><span>Volume</span><b>${esc(d.vol)}</b></div>
+ </div>
+ <h2>Why ${esc(d.tk)}</h2>
+ <div class="card">${d.sig.map(s=>`<div class="sig"><span>${esc(s[0])}</span><div class="bar"><i data-w="${+s[1]||0}"></i></div><b>${+s[1]||0}</b></div>`).join("")}
+  <p class="thesis" style="padding-bottom:12px">${esc(d.thesis)}${d.earnings?` <b style="color:var(--gold)">Earnings ${esc(d.earnings)}.</b>`:""}</p></div>
+ ${d.crowd||d.capitol?crowdHtml(d):""}
+ <h2>Moving the stock</h2>
+ <div class="card news">${(d.news||[]).length?"":`<p class="thesis" style="padding:12px 0">No company news in the last 7 days.</p>`}${(d.news||[]).map(n=>`<a href="${esc(safeUrl(n[3])||"#"+h)}" ${safeUrl(n[3])?'target="_blank" rel="noopener"':""}><span class="dot ${n[0]==="n"?"n":n[0]==="d"?"d":""}"></span>${esc(n[1])}<br><small>${esc(n[2])}</small></a>`).join("")}</div>
+ ${d.run&&d.run.length?`<h2>Next highest scores</h2>
+ <div class="card">${d.run.map((r,i)=>`<div class="run"><b>${esc(r[0])}</b><span>${esc(r[1])}</span>${spark(i*97+h.length*13,r[2],r[3])}<em>+${+r[2]}%</em></div>`).join("")}</div>`:d.rank?`<h2>Where it ranks</h2>
+ <div class="card rankc"><div class="rk"><b>#${+d.rank}</b><span>of ${+d.of} stocks for the ${h} ahead</span></div>
+  <div class="bar"><i data-w="${Math.round(100*(1-(d.rank-1)/Math.max(d.of-1,1)))}"></i></div>
+  <small>${d.scanned===false?"Not on the scan list, so it's scored against the "+(d.of-1)+" stocks that are.":"On the scan list."} The top pick for each tab is #1.</small></div>`:""}`;
+ requestAnimationFrame(()=>view.querySelectorAll(".bar i").forEach(b=>b.style.width=b.dataset.w+"%"));
+ const s=document.getElementById("chart");
+ const hist=d.hist&&d.hist.length>5?d.hist:series(h.length*7919+3,d.pts,d.price,d.chg/100/d.pts*4);
+ const pts=hist.length;
+ const fN=Math.max(3,Math.round(pts*.35));
+ const draw=()=>{
+  const W=s.clientWidth,Ht=s.clientHeight;if(!W)return;
+  const all=[...hist,tgt*1.03,Math.min(...hist)*.99],mn=Math.min(...all),mx=Math.max(...all);
+  const n=pts+fN,x=i=>8+i/(n-1)*(W-16),y=v=>12+(1-(v-mn)/(mx-mn))*(Ht-34);
+  const line=hist.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const last=pts-1,hi=[],lo=[],mid=[];
+  for(let j=0;j<=fN;j++){const t=j/fN,c=d.price+(tgt-d.price)*t,w=d.price*d.up/100*.55*Math.sqrt(t);mid.push(`${x(last+j)},${y(c)}`);hi.push(`${x(last+j)},${y(c+w)}`);lo.unshift(`${x(last+j)},${y(c-w)}`)}
+  const area=`${x(0)},${Ht-22} ${line} ${x(last)},${Ht-22}`;
+  s.innerHTML=`<defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9f4ef" stop-opacity=".16"/><stop offset="1" stop-color="#e9f4ef" stop-opacity="0"/></linearGradient>
+  <linearGradient id="gf" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3ef0a3" stop-opacity=".05"/><stop offset="1" stop-color="#3ef0a3" stop-opacity=".32"/></linearGradient>
+  <filter id="gl"><feGaussianBlur stdDeviation="3"/></filter></defs>
+  <line x1="${x(last)}" x2="${x(last)}" y1="8" y2="${Ht-22}" stroke="#ffffff22" stroke-dasharray="3 4"/>
+  <polygon points="${area}" fill="url(#ga)"/>
+  <polygon points="${hi.join(" ")} ${lo.join(" ")}" fill="url(#gf)"/>
+  <polyline points="${line}" fill="none" stroke="#e9f4ef" stroke-width="2" stroke-linejoin="round"/>
+  <polyline points="${mid.join(" ")}" fill="none" stroke="#3ef0a3" stroke-width="5" opacity=".5" filter="url(#gl)"/>
+  <polyline points="${mid.join(" ")}" fill="none" stroke="#3ef0a3" stroke-width="2.2" stroke-dasharray="5 4"/>
+  <circle cx="${x(last)}" cy="${y(d.price)}" r="5" fill="#07110e" stroke="#e9f4ef" stroke-width="2"/>
+  <circle cx="${x(n-1)}" cy="${y(tgt)}" r="5" fill="#3ef0a3"/>
+  <text x="${x(last)}" y="${Ht-6}" fill="#8aa39a" font-size="12" text-anchor="middle" font-family="Inter">Now</text>
+  <text x="${W-8}" y="${Ht-6}" fill="#3ef0a3" font-size="12" text-anchor="end" font-family="Inter">Target</text>`;
+ };
+ if(ro)ro.disconnect();ro=new ResizeObserver(draw);ro.observe(s);draw();
+}
+tabs.forEach((b,i)=>{b.addEventListener("click",()=>{location.hash=b.dataset.h});
+ b.addEventListener("keydown",e=>{if(e.key==="ArrowRight"||e.key==="ArrowLeft"){const k=tabs[(i+(e.key==="ArrowRight"?1:2))%3];k.focus();location.hash=k.dataset.h}})});
+const route=()=>{const h=location.hash.slice(1);render(H[h]?h:"day")};
+addEventListener("hashchange",route);
+let sx=null;view.addEventListener("touchstart",e=>{sx=e.touches[0].clientX},{passive:true});
+view.addEventListener("touchend",e=>{if(sx===null)return;const dx=e.changedTouches[0].clientX-sx,ks=Object.keys(H),i=ks.indexOf(cur);if(Math.abs(dx)>70){location.hash=ks[(i+(dx<0?1:2))%3]}sx=null});
+document.getElementById("ts").textContent=new Date().toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});
+route();
+fetch(API,{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
+ if(!j.horizons||!j.horizons.day)return;
+ H=j.horizons;live=true;
+ document.getElementById("sample").hidden=true;
+ getStocks();
+ document.getElementById("disc").textContent=j.disclaimer||"";
+ const g=new Date(j.generated_at);
+ document.getElementById("ts").textContent="Updated "+g.toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+ route();
+}).catch(()=>{});
+
+// ---------- Ticker search ----------
+const $=id=>document.getElementById(id);
+const say=(t,busy)=>{$("msg").textContent=t;$("msg").className="msg"+(busy?" busy":"")};
+async function getStocks(){
+ if(stocks)return stocks;
+ try{const r=await fetch(BASE+"stocks.json",{cache:"no-store"});stocks=r.ok?(await r.json()).stocks||{}:{}}catch(e){stocks={}}
+ $("tks").innerHTML=Object.keys(stocks).sort().map(t=>`<option value="${esc(t)}">`).join("");
+ return stocks;
+}
+function recent(add){
+ let list=[];try{list=JSON.parse(localStorage.getItem("upside.recent")||"[]")}catch(e){}
+ if(add){list=[add,...list.filter(x=>x!==add)].slice(0,5);try{localStorage.setItem("upside.recent",JSON.stringify(list))}catch(e){}}
+ $("recent").innerHTML=list.map(t=>`<button type="button" data-t="${esc(t)}">${esc(t)}</button>`).join("");
+}
+function sampleFor(t){
+ const k=Object.keys(H).find(k=>H[k].tk===t);if(!k)return null;
+ const o={};for(const h of Object.keys(LABEL))o[h]={...H[k],horizon:LABEL[h],run:[],rank:h===k?1:3,of:61,scanned:true};
+ return o;
+}
+let seq=0;
+async function search(raw){
+ const t=String(raw||"").trim().toUpperCase().replace(/^\$/,"");
+ if(!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(t)){say("Enter a ticker symbol like AAPL or BRK.B.");return}
+ const my=++seq;say(`Scoring ${t}…`,true);
+ let data=null;
+ if(live){const s=await getStocks();if(s[t])data=s[t]}
+ else data=sampleFor(t);
+ if(!data&&LOOKUP){
+  try{const r=await fetch(LOOKUP+(LOOKUP.includes("?")?"&":"?")+"t="+encodeURIComponent(t));const j=await r.json();
+   if(my!==seq)return;
+   if(!r.ok){say(j.error||"Lookup failed. Try again.");return}
+   data=j.horizons}
+  catch(e){if(my===seq)say("Couldn't reach the lookup service. Check your connection and try again.");return}
+ }
+ if(my!==seq)return;
+ if(!data){say(live?`${t} isn't on today's scan list, and lookups for other tickers aren't switched on yet (see the setup guide).`:`This preview only has sample data for ${Object.values(H).map(x=>x.tk).join(", ")}. Every ticker works once the app is connected to its live data.`);return}
+ L=data;mode="lookup";say("");recent(t);$("q").value="";
+ $("looklabel").innerHTML=`Showing <b>${esc(t)}</b>${data.day&&data.day.scanned===false?" · not on the scan list":""}`;
+ $("lookbar").hidden=false;route();$("q").blur();
+}
+$("search").addEventListener("submit",e=>{e.preventDefault();search($("q").value)});
+$("recent").addEventListener("click",e=>{const b=e.target.closest("button");if(b)search(b.dataset.t)});
+$("back").addEventListener("click",()=>{mode="picks";L=null;$("lookbar").hidden=true;say("");route()});
+recent();
+}
+</script>
+</body>
+</html>
