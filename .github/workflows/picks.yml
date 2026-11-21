@@ -1,0 +1,57 @@
+name: Build and publish picks
+
+on:
+  schedule:
+    - cron: "37 12 * * 1-5"   # weekdays before the open (7:37 ET in winter)
+    - cron: "23 21 * * 1-5"   # weekdays after the close (4:23 ET in winter)
+  workflow_dispatch:           # "Run workflow" button for a manual refresh
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: picks
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Price history and congressional trades are cached between runs,
+      # so only new data is downloaded.
+      - uses: actions/cache@v4
+        with:
+          path: backend/data
+          key: data-${{ github.run_id }}
+          restore-keys: data-
+
+      - run: pip install -r backend/requirements.txt
+
+      - name: Score the market
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+          BARGO_API_KEY: ${{ secrets.BARGO_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python backend/run.py --out site/picks.json
+
+      - run: cp app/index.html site/index.html
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
