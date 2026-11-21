@@ -33,11 +33,11 @@ jobs:
       # so only new data is downloaded.
       - uses: actions/cache@v4
         with:
-          path: backend/data
+          path: upside/backend/data
           key: data-${{ github.run_id }}
           restore-keys: data-
 
-      - run: pip install -r backend/requirements.txt
+      - run: pip install -r upside/backend/requirements.txt
 
       - name: Score the market
         env:
@@ -45,9 +45,9 @@ jobs:
           MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
           BARGO_API_KEY: ${{ secrets.BARGO_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python backend/run.py --out site/picks.json
+        run: python upside/backend/run.py --out site/picks.json
 
-      - run: cp app/index.html site/index.html
+      - run: cp upside/app/index.html site/index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
