@@ -48,8 +48,16 @@ def main():
         capitol_src = sources.Bargo(os.environ.get("BARGO_API_KEY"), Path(args.cache).parent / "congress.json")
 
     log(f"Loading price history for {len(TICKERS)} stocks...")
+    # SPY (the S&P 500 ETF) isn't a pick; it's fetched alongside for market mood and beta.
     hist = bars_src.history(TICKERS)
-    px = {t: score.price_features(hist[t]) for t in TICKERS}
+    try:  # one call; the day-by-day cache only holds the scanned stocks
+        spy = (bars_src.history(["SPY"])["SPY"] if args.demo else bars_src.ticker_history("SPY"))
+    except Exception as e:
+        log("Market data skipped:", e)
+        spy = {"c": []}
+    market = score.market_features(spy)
+    log(f"Market mood: {market['label']} ({market['score']:.0f}/100). {market['summary']}")
+    px = {t: score.price_features(hist[t], spy["c"]) for t in TICKERS}
     tickers = [t for t in TICKERS if px[t]]
     log(f"{len(tickers)} stocks have enough history.")
 
@@ -85,15 +93,19 @@ def main():
         except Exception as e:
             log(f"{t}: skipped ({e})")
             continue
+        try:
+            earn = score.earnings_features(fh.earnings_hist(t))
+        except Exception:
+            earn = score.earnings_features([])
         feats[t] = {"px": px[t], "news": score.news_features(items), "an": score.analyst_features(recs),
                     "reddit": score.reddit_features(crowd.get(t)),
-                    "congress": congress.get(t) or score.congress_features([], track)}
+                    "congress": congress.get(t) or score.congress_features([], track), "earn": earn}
         if i % 10 == 0:
             log(f"  scanned {i}/{len(tickers)}")
 
     ref = score.reference(feats)
     n = len(feats)
-    ranked = {hz: score.rank(feats, hz, earnings, ref) for hz in score.HORIZONS}
+    ranked = {hz: score.rank(feats, hz, earnings, ref, market) for hz in score.HORIZONS}
 
     quotes = {}
     for t in feats:
@@ -109,10 +121,13 @@ def main():
         s = ranked[hz][pos]
         price, chg = quotes[t]
         return cards.build(t, INFO[t]["name"], INFO[t]["sector"], feats[t], s, hz, hist[t]["c"],
-                           hist[t]["v"][-1], price, chg, pos + 1, n, run=run, thesis=thesis, top=top)
+                           hist[t]["v"][-1], price, chg, pos + 1, n, run=run, thesis=thesis, top=top,
+                           dates=hist[t].get("d"), market=market)
 
     now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    picks = {"generated_at": now, "disclaimer": cards.DISCLAIMER, "universe": n, "horizons": {}}
+    mkt_public = {k: market.get(k) for k in ("score", "label", "summary", "r5", "r20", "dev50")}
+    picks = {"generated_at": now, "disclaimer": cards.DISCLAIMER, "universe": n,
+             "market": mkt_public, "horizons": {}}
     stocks = {"generated_at": now, "stocks": {t: {} for t in feats}}
     for hz in score.HORIZONS:
         for pos, s in enumerate(ranked[hz]):
@@ -121,13 +136,13 @@ def main():
         t = top["t"]
         run = [[r["t"], INFO[r["t"]]["name"], round(r["up"] * 100, 1),
                 [round(c, 2) for c in hist[r["t"]]["c"][-24:]]] for r in ranked[hz][1:4]]
-        thesis = cards.claude_thesis(t, INFO[t]["name"], top, feats[t]["news"], hz, log)
+        thesis = cards.claude_thesis(t, INFO[t]["name"], top, feats[t]["news"], hz, log, market)
         picks["horizons"][hz] = card(t, hz, 0, top=True, thesis=thesis, run=run)
         log(f"{hz:>5}: {t}  +{top['up'] * 100:.1f}%  score {top['score']:.0f}  conf {top['conf']:.0f}")
 
     # What the lookup service needs to score a ticker outside the scanned list the same way.
     reference = {
-        "generated_at": now, "universe": n, "ref": ref, "earnings": earnings,
+        "generated_at": now, "universe": n, "ref": ref, "earnings": earnings, "market": market,
         "scores": {hz: [round(r["score"], 3) for r in ranked[hz]] for hz in score.HORIZONS},
         "reddit": crowd,
         "congress": {t: {**c, "recent": [{k: x.get(k) for k in ("member", "chamber", "type", "amount_range",
