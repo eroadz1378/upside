@@ -2,7 +2,7 @@
 
 Uses the latest reference.json from the twice-daily run (the scanned stocks'
 values for every signal, plus Reddit and Congress data), then fetches this one
-ticker's prices, news, analyst ratings and quote. About 5 API calls per lookup.
+ticker's prices, news, analyst ratings, earnings history and quote. About 6 API calls per lookup.
 """
 import re
 
@@ -29,7 +29,8 @@ def lookup(ticker, ref, fh, massive):
     q = fh.quote(t)
     if len(bars["c"]) < 25 or not q.get("c"):
         raise NotFound(f"No recent trading data for {t}. Check the symbol; only US-listed stocks are covered.")
-    px = score.price_features(bars)
+    market = ref.get("market") or {}
+    px = score.price_features(bars, market.get("spy_c"))
     prof = {}
     try:
         prof = fh.profile(t)
@@ -45,17 +46,22 @@ def lookup(ticker, ref, fh, massive):
         "reddit": score.reddit_features(ref.get("reddit", {}).get(t)),
         "congress": ref.get("congress", {}).get(t) or score.congress_features([], {}),
     }
+    try:
+        feats["earn"] = score.earnings_features(fh.earnings_hist(t))
+    except Exception:
+        feats["earn"] = score.earnings_features([])
     price, chg = q["c"], q.get("dp") or 0.0
     scanned = t in INFO
     n = ref["universe"]
-    out = {"ticker": t, "scanned": scanned, "reference_at": ref.get("generated_at"), "horizons": {}}
+    out = {"ticker": t, "scanned": scanned, "reference_at": ref.get("generated_at"), "horizons": {},
+           "market": {k: market.get(k) for k in ("score", "label", "summary", "r5", "r20", "dev50")} if market else None}
     for hz in score.HORIZONS:
-        s = score.score_one(feats, ref["ref"], hz, ref.get("earnings", {}).get(t))
+        s = score.score_one(feats, ref["ref"], hz, ref.get("earnings", {}).get(t), market)
         # Rank against the latest run's scores (a scanned stock's own earlier score is in
         # that list, but only strictly higher scores count, so it isn't counted twice).
         rank = score.rank_among(s["score"], [{"score": x} for x in ref["scores"][hz]])
         out["horizons"][hz] = cards.build(t, name, sector, feats, s, hz, bars["c"], bars["v"][-1],
                                           price, chg, min(rank, n) if scanned else rank, n,
-                                          scanned=scanned)
+                                          scanned=scanned, dates=bars.get("d"), market=market)
     out["disclaimer"] = cards.DISCLAIMER
     return out

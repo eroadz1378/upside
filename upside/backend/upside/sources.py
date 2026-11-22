@@ -63,6 +63,10 @@ class Finnhub:
     def profile(self, sym):
         return self._q("/stock/profile2", symbol=sym) or {}
 
+    def earnings_hist(self, sym):
+        """Last 4 quarters of reported EPS vs analyst estimates (free tier)."""
+        return self._q("/stock/earnings", symbol=sym) or []
+
     def earnings_calendar(self, days_ahead=35):
         today = dt.date.today()
         data = self._q("/calendar/earnings",
@@ -93,29 +97,32 @@ class Massive:
             f.write_text(json.dumps(rows))
         return rows
 
-    def ticker_history(self, sym, calendar_days=110):
+    def ticker_history(self, sym, calendar_days=200):
         """One stock's daily bars in a single call (used by the lookup service)."""
         end, start = dt.date.today(), dt.date.today() - dt.timedelta(days=calendar_days)
         data = _get(self.s, self.lim, f"{self.BASE}/v2/aggs/ticker/{sym}/range/1/day/{start}/{end}",
                     {"adjusted": "true", "sort": "asc", "limit": 500, "apiKey": self.key})
         rows = data.get("results") or []
-        return {"c": [r["c"] for r in rows], "v": [r["v"] for r in rows]}
+        return {"c": [r["c"] for r in rows], "v": [r["v"] for r in rows],
+                "d": [str(dt.datetime.utcfromtimestamp(r["t"] / 1000).date()) for r in rows]}
 
-    def history(self, tickers, trading_days=70):
-        """{ticker: {"c": [closes...], "v": [volumes...]}} oldest -> newest."""
-        out = {t: {"c": [], "v": []} for t in tickers}
+    def history(self, tickers, trading_days=130):
+        """{ticker: {"c": [closes...], "v": [volumes...], "d": [dates...]}} oldest -> newest.
+        About 6 months, for the intermediate-momentum signal. Cached days are never re-downloaded."""
+        out = {t: {"c": [], "v": [], "d": []} for t in tickers}
         days, d = [], dt.date.today() - dt.timedelta(days=1)
         while len(days) < trading_days and d > dt.date.today() - dt.timedelta(days=trading_days * 2):
             if d.weekday() < 5:
                 rows = self.day(d, tickers)
                 if rows:
-                    days.append(rows)
+                    days.append((d, rows))
             d -= dt.timedelta(days=1)
-        for rows in reversed(days):
+        for day, rows in reversed(days):
             for t in tickers:
                 if t in rows:
                     out[t]["c"].append(rows[t]["c"])
                     out[t]["v"].append(rows[t]["v"])
+                    out[t]["d"].append(str(day))
         return out
 
 
@@ -133,8 +140,12 @@ class Demo:
     def __init__(self, seed=7):
         self.r = random.Random(seed)
 
-    def history(self, tickers, trading_days=70):
-        out = {}
+    def history(self, tickers, trading_days=130):
+        out, days, d = {}, [], dt.date.today() - dt.timedelta(days=1)
+        while len(days) < trading_days:
+            if d.weekday() < 5:
+                days.insert(0, str(d))
+            d -= dt.timedelta(days=1)
         for t in tickers:
             p, drift, vol = self.r.uniform(30, 900), self.r.gauss(0.0006, 0.0015), self.r.uniform(0.008, 0.03)
             c, v, base = [], [], self.r.uniform(2e6, 8e7)
@@ -142,7 +153,7 @@ class Demo:
                 p *= 1 + self.r.gauss(drift, vol)
                 c.append(round(p, 2))
                 v.append(int(base * self.r.uniform(0.6, 1.6)))
-            out[t] = {"c": c, "v": v}
+            out[t] = {"c": c, "v": v, "d": days}
         return out
 
     def quote(self, sym, last=None, prev=None):
@@ -163,6 +174,18 @@ class Demo:
 
     def earnings_calendar(self, days_ahead=35):
         return {}
+
+    def earnings_hist(self, sym):
+        today = dt.date.today()
+        out = []
+        for q in range(4):
+            end = today - dt.timedelta(days=50 + 91 * q)
+            est = round(self.r.uniform(0.3, 3.0), 2)
+            out.append({"symbol": sym, "period": str(end), "estimate": est,
+                        "actual": round(est * (1 + self.r.gauss(0.03, 0.08)), 2)})
+        for r in out:
+            r["surprisePercent"] = round((r["actual"] - r["estimate"]) / r["estimate"] * 100, 2)
+        return out
 
 
 class ApeWisdom:

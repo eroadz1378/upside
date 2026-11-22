@@ -14,15 +14,16 @@ import time
 from . import sentiment
 
 # Politician trades are disclosed up to 45 days late, so they get little weight
-# for tomorrow and more for the month. Reddit attention is the reverse.
+# for tomorrow and more for the month. Reddit attention is the reverse. Earnings
+# surprises drift for weeks after a report, so they matter more for longer horizons.
 HORIZONS = {
-    "day":   {"days": 1,  "label": "by close tomorrow",   "weights": {"news": .28, "analyst": .04, "momentum": .20, "technicals": .12, "volume": .16, "reddit": .15, "congress": .05}},
-    "week":  {"days": 5,  "label": "over 5 trading days", "weights": {"news": .20, "analyst": .16, "momentum": .20, "technicals": .16, "volume": .08, "reddit": .10, "congress": .10}},
-    "month": {"days": 21, "label": "over the next month", "weights": {"news": .12, "analyst": .28, "momentum": .20, "technicals": .16, "volume": .04, "reddit": .05, "congress": .15}},
+    "day":   {"days": 1,  "label": "by close tomorrow",   "weights": {"news": .26, "analyst": .04, "momentum": .20, "technicals": .12, "volume": .15, "reddit": .13, "congress": .04, "earnings": .06}},
+    "week":  {"days": 5,  "label": "over 5 trading days", "weights": {"news": .18, "analyst": .14, "momentum": .20, "technicals": .14, "volume": .07, "reddit": .08, "congress": .09, "earnings": .10}},
+    "month": {"days": 21, "label": "over the next month", "weights": {"news": .10, "analyst": .24, "momentum": .20, "technicals": .12, "volume": .03, "reddit": .04, "congress": .13, "earnings": .14}},
 }
 SIGNAL_LABELS = {"news": "News sentiment", "analyst": "Analyst ratings", "momentum": "Momentum",
                  "technicals": "Technicals", "volume": "Volume", "reddit": "Reddit buzz",
-                 "congress": "Politician trades"}
+                 "congress": "Politician trades", "earnings": "Earnings"}
 
 
 def _ret(c, n):
@@ -38,7 +39,24 @@ def _rsi(c, n=14):
     return 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
 
 
-def price_features(bars):
+def _beta(c, mkt, n=60):
+    """How strongly the stock moves with the S&P 500 (1.0 = in step). Clipped to 0.3-2.0."""
+    if not mkt:
+        return 1.0
+    k = min(n, len(c) - 1, len(mkt) - 1)
+    if k < 20:
+        return 1.0
+    a = [c[i] / c[i - 1] - 1 for i in range(len(c) - k, len(c))]
+    b = [mkt[i] / mkt[i - 1] - 1 for i in range(len(mkt) - k, len(mkt))]
+    mb = st.mean(b)
+    var = sum((x - mb) ** 2 for x in b)
+    if var == 0:
+        return 1.0
+    cov = sum((x - st.mean(a)) * (y - mb) for x, y in zip(a, b))
+    return max(0.3, min(2.0, cov / var))
+
+
+def price_features(bars, mkt=None):
     c, v = bars["c"], bars["v"]
     if len(c) < 25:
         return None
@@ -46,8 +64,17 @@ def price_features(bars):
     ma20 = st.mean(c[-20:])
     ma50 = st.mean(c[-50:]) if len(c) >= 50 else ma20
     rsi = _rsi(c)
+    # Intermediate momentum skipping the latest week (up to ~6 months back): the classic
+    # momentum effect. Very recent moves tend to partly reverse, so they're scored separately.
+    look = min(len(c) - 1, 125)
+    momskip = c[-6] / c[-1 - look] - 1 if look > 30 else None
+    r5, r20 = _ret(c, 5), _ret(c, 20)
     return {
-        "r1": _ret(c, 1), "r5": _ret(c, 5), "r20": _ret(c, 20), "r50": _ret(c, 50),
+        "r1": _ret(c, 1), "r5": r5, "r20": r20, "r50": _ret(c, 50),
+        "pull5": -r5 if r5 is not None else None,      # bigger recent dip scores higher
+        "pull20": -r20 if r20 is not None else None,
+        "momskip": momskip,
+        "beta": _beta(c, mkt),
         "vol": st.pstdev(rets) or 0.01,
         "vol_surge": v[-1] / (st.mean(v[-21:-1]) or 1),
         "trend": (c[-1] / ma20 - 1) + (ma20 / ma50 - 1),
@@ -56,6 +83,58 @@ def price_features(bars):
         "rsi_fit": None if rsi is None else -abs(rsi - 62),
         "last": c[-1], "prev": c[-2],
     }
+
+
+def market_features(spy):
+    """Market mood from the S&P 500 ETF (SPY): trend vs its 50-day average, the last month's
+    move, volatility and the drop from its recent high. 0-100: under 40 risk-off, over 60 risk-on."""
+    c = (spy or {}).get("c") or []
+    if len(c) < 55:
+        return {"score": 50.0, "label": "Neutral", "summary": "Market data unavailable.", "vol_d": 0.01, "spy_c": c[-130:]}
+    clip = lambda z, lo=-1.0, hi=1.0: max(lo, min(hi, z))
+    ma50 = st.mean(c[-50:])
+    dev = c[-1] / ma50 - 1
+    r5, r20 = c[-1] / c[-6] - 1, c[-1] / c[-21] - 1
+    rets = [c[i] / c[i - 1] - 1 for i in range(len(c) - 20, len(c))]
+    vol_d = st.pstdev(rets) or 0.008
+    vol_a = vol_d * math.sqrt(252)
+    dd = c[-1] / max(c[-60:]) - 1
+    score = (50 + 22 * clip(dev / 0.03) + 13 * clip(r20 / 0.04)
+             - 15 * clip((vol_a - 0.16) / 0.14, 0, 1) - 15 * clip(-dd / 0.10, 0, 1))
+    score = max(0.0, min(100.0, score))
+    label = "Risk-on" if score >= 60 else "Risk-off" if score < 40 else "Neutral"
+    side = "above" if dev >= 0 else "below"
+    calm = "calm" if vol_a < 0.15 else "choppy" if vol_a < 0.25 else "very volatile"
+    summary = (f"S&P 500 {'up' if r5 >= 0 else 'down'} {abs(r5) * 100:.1f}% this week, "
+               f"{abs(dev) * 100:.1f}% {side} its 50-day average; trading is {calm}.")
+    return {"score": round(score, 1), "label": label, "summary": summary, "vol_d": vol_d,
+            "r5": round(r5 * 100, 2), "r20": round(r20 * 100, 2), "dev50": round(dev * 100, 2),
+            "spy_c": [round(x, 2) for x in c[-130:]]}
+
+
+def earnings_features(rows, today=None):
+    """Post-earnings drift: the latest surprise vs analyst estimates, fading over ~3 months
+    after the report, plus how consistently the company has beaten over the last 4 quarters."""
+    import datetime as _dt
+    today = today or _dt.date.today()
+    rows = [r for r in (rows or []) if r.get("estimate") not in (None, 0) and r.get("actual") is not None]
+    if not rows:
+        return {"surprise": None, "last": None, "beats": None, "score": None}
+    rows.sort(key=lambda r: r.get("period") or "", reverse=True)
+    def pct(r):
+        sp = r.get("surprisePercent")
+        return sp if sp is not None else (r["actual"] - r["estimate"]) / abs(r["estimate"]) * 100
+    last = pct(rows[0])
+    try:
+        reported = _dt.date.fromisoformat(rows[0]["period"]) + _dt.timedelta(days=35)
+        age = max((today - reported).days, 0)
+    except Exception:
+        age = 45
+    fade = math.exp(-age / 60)
+    beats = sum(1 for r in rows[:4] if pct(r) > 0)
+    surprise = max(-25.0, min(25.0, last)) * fade
+    return {"surprise": surprise, "last": round(last, 1), "beats": beats, "n": min(4, len(rows)),
+            "score": surprise + (beats - len(rows[:4]) / 2) * 1.5, "age_days": age}
 
 
 def news_features(items, now=None):
@@ -155,6 +234,9 @@ SUBS = {
     "vol": lambda f: f["px"]["vol"],
     "rating": lambda f: f["an"]["rating"], "revision": lambda f: f["an"]["revision"],
     "reddit": lambda f: f["reddit"]["growth"], "congress": lambda f: f["congress"]["net"],
+    "pull5": lambda f: f["px"].get("pull5"), "pull20": lambda f: f["px"].get("pull20"),
+    "momskip": lambda f: f["px"].get("momskip"),
+    "earn": lambda f: (f.get("earn") or {}).get("score"),
 }
 
 
@@ -178,19 +260,26 @@ def _blend(*pairs):
     return sum(v * w for v, w in pairs) / tw
 
 
-def score_one(f, ref, horizon, earnings_date=None):
+def score_one(f, ref, horizon, earnings_date=None, market=None):
     hz = HORIZONS[horizon]
     P = lambda k: _pct(ref, k, SUBS[k](f))
     news = _blend((P("sent_1d"), 1), (P("sent_7d"), 1), (P("buzz"), .4))
     if horizon != "day":
         news = _blend((news, 1), (P("sent_7d"), 1))
-    m_short, m_long = {"day": ("r1", "r5"), "week": ("r5", "r20"), "month": ("r20", "r50")}[horizon]
+    # Short horizons: buy pullbacks in stocks whose medium-term trend is intact
+    # (short-term reversal). Month: intermediate momentum, plus a small 1-month reversal.
+    momentum = {
+        "day":   lambda: _blend((P("pull5"), 1.0), (P("momskip"), 1.0)),
+        "week":  lambda: _blend((P("pull5"), 0.7), (P("momskip"), 1.3)),
+        "month": lambda: _blend((P("momskip"), 1.5), (P("pull20"), 0.5)),
+    }[horizon]()
     sig = {
         "news": news,
         "analyst": _blend((P("rating"), 1), (P("revision"), 1.2)),
-        "momentum": _blend((P(m_short), 1), (P(m_long), 1)),
+        "momentum": momentum,
         "technicals": _blend((P("trend"), 1), (P("rsi_fit"), 1), (P("breakout"), .5)),
         "volume": P("vol_surge"), "reddit": P("reddit"), "congress": P("congress"),
+        "earnings": P("earn"),
     }
     comp = sum(sig[k] * w for k, w in hz["weights"].items())
     vol = f["px"]["vol"]
@@ -198,22 +287,29 @@ def score_one(f, ref, horizon, earnings_date=None):
     # own volatility over the horizon. A strong score on a calm stock gives a modest target.
     edge = (comp - 50) / 50
     up = edge * vol * math.sqrt(hz["days"]) * 1.25
+    # Market mood: the whole market's expected drift, scaled by how much this stock moves
+    # with it (beta). Risk-off markets pull targets down and lower confidence.
+    mood = (market or {}).get("score", 50.0)
+    m_edge = (mood - 50) / 50
+    beta = f["px"].get("beta", 1.0)
+    up += beta * m_edge * (market or {}).get("vol_d", 0.008) * math.sqrt(hz["days"]) * 0.6
     agree = sum(1 for v in sig.values() if v >= 60) / len(sig)
     conf = 35 + 45 * agree + 10 * max(edge, 0)
+    conf -= max(0.0, 45 - mood) / 3
     if earnings_date and hz["days"] >= 5:
         conf -= 8  # earnings inside the window: bigger move either way
     q = _pct(ref, "vol", vol) / 100
     risk = "Low" if q < .33 else "Medium" if q < .75 else "High"
     return {"score": comp, "sig": sig, "up": up, "conf": max(min(conf, 88), 20), "vol": vol,
-            "risk": risk, "earnings": earnings_date}
+            "risk": risk, "earnings": earnings_date, "beta": beta, "mood": mood}
 
 
-def rank(feats, horizon, earnings=None, ref=None):
+def rank(feats, horizon, earnings=None, ref=None, market=None):
     """Score every scanned stock; best composite first. Ranking is on the score (quality
     of evidence), not raw upside, so the most volatile stock doesn't win by default."""
     earnings = earnings or {}
     ref = ref or reference(feats)
-    results = [{"t": t, **score_one(f, ref, horizon, earnings.get(t))} for t, f in feats.items()]
+    results = [{"t": t, **score_one(f, ref, horizon, earnings.get(t), market)} for t, f in feats.items()]
     results.sort(key=lambda r: r["score"], reverse=True)
     return results
 
